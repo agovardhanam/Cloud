@@ -1,68 +1,197 @@
-# Main Script Start
-# -------------------------------------------
-Write-Host -ForegroundColor Cyan "Starting the Deployment Process..."
+<#PSScriptInfo
+.VERSION 23.6.10.1
+.GUID 8aa84227-ddb5-4276-95fb-ffb2d6121bf8
+.AUTHOR David Segura @SeguraOSD
+.COMPANYNAME osdcloud.com
+.COPYRIGHT (c) 2023 David Segura osdcloud.com. All rights reserved.
+.TAGS OSDeploy OSDCloud WinGet PowerShell
+.LICENSEURI
+.PROJECTURI https://github.com/OSDeploy/OSD
+.ICONURI
+.EXTERNALMODULEDEPENDENCIES
+.REQUIREDSCRIPTS
+.EXTERNALSCRIPTDEPENDENCIES
+.RELEASENOTES
+Script should be executed in a Command Prompt using the following command
+powershell Invoke-Expression -Command (Invoke-RestMethod -Uri winget.osdcloud.com)
+This is abbreviated as
+powershell iex (irm winget.osdcloud.com)
+#>
+#Requires -RunAsAdministrator
+<#
+.SYNOPSIS
+    PowerShell Script which supports WinGet
+.DESCRIPTION
+    PowerShell Script which supports WinGet
+.NOTES
+    Version 23.6.10.1
+.LINK
+    https://raw.githubusercontent.com/OSDeploy/OSD/master/cloud/subdomains/winget.osdcloud.com.ps1
+.EXAMPLE
+    powershell iex (irm winget.osdcloud.com)
+#>
+[CmdletBinding()]
+param()
+$ScriptName = 'winget.osdcloud.com'
+$ScriptVersion = '23.6.10.1'
 
-# Trigger Custom OSDCloud Provisioning
-Write-Host -ForegroundColor Cyan "Running OSDCloud Provisioning Script..."
-Watch-OSDCloudProvisioning {
-    Write-Host -ForegroundColor Cyan "Starting SeguraOSD's Custom OSDCloud ..."
+#region Initialize
+$Transcript = "$((Get-Date).ToString('yyyy-MM-dd-HHmmss'))-$ScriptName.log"
+$null = Start-Transcript -Path (Join-Path "$env:SystemRoot\Temp" $Transcript) -ErrorAction Ignore
+
+if ($env:SystemDrive -eq 'X:') {
+    $WindowsPhase = 'WinPE'
+}
+else {
+    $ImageState = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Setup\State' -ErrorAction Ignore).ImageState
+    if ($env:UserName -eq 'defaultuser0') {$WindowsPhase = 'OOBE'}
+    elseif ($ImageState -eq 'IMAGE_STATE_SPECIALIZE_RESEAL_TO_OOBE') {$WindowsPhase = 'Specialize'}
+    elseif ($ImageState -eq 'IMAGE_STATE_SPECIALIZE_RESEAL_TO_AUDIT') {$WindowsPhase = 'AuditMode'}
+    else {$WindowsPhase = 'Windows'}
+}
+
+Write-Host -ForegroundColor Green "[+] $ScriptName $ScriptVersion ($WindowsPhase Phase)"
+Invoke-Expression -Command (Invoke-RestMethod -Uri functions.osdcloud.com)
+#endregion
+
+#region Admin Elevation
+$whoiam = [system.security.principal.windowsidentity]::getcurrent().name
+$isElevated = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
+if ($isElevated) {
+    Write-Host -ForegroundColor Green "[+] Running as $whoiam (Admin Elevated)"
+}
+else {
+    Write-Host -ForegroundColor Red "[!] Running as $whoiam (NOT Admin Elevated)"
+    Break
+}
+#endregion
+
+#region Transport Layer Security (TLS) 1.2
+Write-Host -ForegroundColor Green "[+] Transport Layer Security (TLS) 1.2"
+[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+#endregion
+
+#region WinPE
+if ($WindowsPhase -eq 'WinPE') {
+    Write-Host -ForegroundColor Red "[!] WinGet is not supported in WinPE"
+    $null = Stop-Transcript -ErrorAction Ignore
+}
+#endregion
+
+#region Specialize
+if ($WindowsPhase -eq 'Specialize') {
+    $null = Stop-Transcript -ErrorAction Ignore
+}
+#endregion
+
+#region AuditMode
+if ($WindowsPhase -eq 'AuditMode') {
+    $null = Stop-Transcript -ErrorAction Ignore
+}
+#endregion
+
+#region OOBE
+if ($WindowsPhase -eq 'OOBE') {
+    Write-Host  -ForegroundColor Cyan "Starting SeguraOSD's Custom OSDCloud ..."
     Start-Sleep -Seconds 5
 
     # Change Display Resolution for Virtual Machine
     if ((Get-MyComputerModel) -match 'Virtual') {
-        Write-Host -ForegroundColor Cyan "Setting Display Resolution to 1600x"
+        Write-Host  -ForegroundColor Cyan "Setting Display Resolution to 1600x"
         Set-DisRes 1600
     }
 
-    # Update and Import OSD PowerShell Module
-    Write-Host -ForegroundColor Cyan "Updating the awesome OSD PowerShell Module"
+    # Make sure I have the latest OSD Content
+    Write-Host  -ForegroundColor Cyan "Updating the awesome OSD PowerShell Module"
     Install-Module OSD -Force
-    Write-Host -ForegroundColor Cyan "Importing the sweet OSD PowerShell Module"
+
+    Write-Host  -ForegroundColor Cyan "Importing the sweet OSD PowerShell Module"
     Import-Module OSD -Force
 
-    # Placeholder for ISO Ejection
-    Write-Host -ForegroundColor Cyan "Ejecting ISO"
+    # TODO: Spend the time to write a function to do this and put it here
+    Write-Host  -ForegroundColor Cyan "Ejecting ISO"
     Write-Warning "That didn't work because I haven't coded it yet!"
 
-    # Start OSDCloud Deployment
-    Write-Host -ForegroundColor Cyan "Start OSDCloud with MY Parameters"
+    # Start OSDCloud ZTI the RIGHT way
+    Write-Host  -ForegroundColor Cyan "Start OSDCloud with MY Parameters"
     Start-OSDCloud -OSLanguage en-us -OSBuild 20H2 -OSEdition Enterprise -ZTI
 
-    # Placeholder for Post-Action
-    Write-Host -ForegroundColor Cyan "Starting OSDCloud PostAction ..."
-    Write-Warning "I'm not sure of what to put here yet"
+    # Inline application installation logic
+    Write-Host -ForegroundColor Green "[+] Starting application installation..."
 
-    # Restart from WinPE
-    Write-Host -ForegroundColor Cyan "Restarting in 20 seconds!"
-    Start-Sleep -Seconds 20
-    wpeutil reboot
+    # List of applications to install
+    $AppsToInstall = @(
+        "Microsoft.Office",
+        "Mozilla.Firefox",
+        "Google.Chrome",
+        "Notepad++.Notepad++"
+    )
+
+    foreach ($App in $AppsToInstall) {
+        Write-Host "Installing $App..." -ForegroundColor Cyan
+        winget install -e --id $App --accept-package-agreements --accept-source-agreements
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "$App installed successfully!" -ForegroundColor Green
+        }
+        else {
+            Write-Host "Failed to install $App. Exit Code: $LASTEXITCODE" -ForegroundColor Red
+        }
+    }
+
+    Write-Host -ForegroundColor Green "[+] Application installation complete"
+    $null = Stop-Transcript -ErrorAction Ignore
 }
+#endregion
 
-# Continue with Winget Installation
-Write-Host -ForegroundColor Cyan "OSDCloud provisioning completed. Proceeding with Winget installation..."
+#region Windows
+if ($WindowsPhase -eq 'Windows') {
+    Write-Host  -ForegroundColor Cyan "Starting SeguraOSD's Custom OSDCloud ..."
+    Start-Sleep -Seconds 5
 
-# Ensure Winget is Installed
-Write-Host -ForegroundColor Cyan "Checking if Winget is installed..."
-if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
-    Write-Host -ForegroundColor Cyan "Winget not found. Installing Winget..."
-    osdcloud-StartOOBE -InstallWinGet -WinGetUpgrade -WinGetPwsh -SkipOSD
+    # Change Display Resolution for Virtual Machine
+    if ((Get-MyComputerModel) -match 'Virtual') {
+        Write-Host  -ForegroundColor Cyan "Setting Display Resolution to 1600x"
+        Set-DisRes 1600
+    }
+
+    # Make sure I have the latest OSD Content
+    Write-Host  -ForegroundColor Cyan "Updating the awesome OSD PowerShell Module"
+    Install-Module OSD -Force
+
+    Write-Host  -ForegroundColor Cyan "Importing the sweet OSD PowerShell Module"
+    Import-Module OSD -Force
+
+    # TODO: Spend the time to write a function to do this and put it here
+    Write-Host  -ForegroundColor Cyan "Ejecting ISO"
+    Write-Warning "That didn't work because I haven't coded it yet!"
+
+    # Start OSDCloud ZTI the RIGHT way
+    Write-Host  -ForegroundColor Cyan "Start OSDCloud with MY Parameters"
+    Start-OSDCloud -OSLanguage en-us -OSBuild 20H2 -OSEdition Enterprise -ZTI
+
+    # Inline application installation logic
+    Write-Host -ForegroundColor Green "[+] Starting application installation..."
+
+    # List of applications to install
+    $AppsToInstall = @(
+        "Microsoft.Office",
+        "Mozilla.Firefox",
+        "Google.Chrome",
+        "Notepad++.Notepad++"
+    )
+
+    foreach ($App in $AppsToInstall) {
+        Write-Host "Installing $App..." -ForegroundColor Cyan
+        winget install -e --id $App --accept-package-agreements --accept-source-agreements
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "$App installed successfully!" -ForegroundColor Green
+        }
+        else {
+            Write-Host "Failed to install $App. Exit Code: $LASTEXITCODE" -ForegroundColor Red
+        }
+    }
+
+    Write-Host -ForegroundColor Green "[+] Application installation complete"
+    $null = Stop-Transcript -ErrorAction Ignore
 }
-
-# Install Applications using Winget
-Write-Host -ForegroundColor Cyan "Installing Applications via Winget..."
-Start-Sleep -Seconds 3
-
-# Example Application Installations
-Write-Host -ForegroundColor Cyan "Installing Microsoft Office..."
-winget install -e --id Microsoft.Office --accept-package-agreements --accept-source-agreements
-
-Write-Host -ForegroundColor Cyan "Installing Google Chrome..."
-winget install -e --id Google.Chrome --accept-package-agreements --accept-source-agreements
-
-Write-Host -ForegroundColor Cyan "Installing Zoom..."
-winget install -e --id Zoom.Zoom --accept-package-agreements --accept-source-agreements
-
-Write-Host -ForegroundColor Cyan "Application installation complete. Deployment process finished!"
-
-# End of Script
-# -------------------------------------------
+#endregion
