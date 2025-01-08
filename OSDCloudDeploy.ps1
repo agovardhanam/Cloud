@@ -1,33 +1,68 @@
-Write-Host  -ForegroundColor Cyan "Starting SeguraOSD's Custom OSDCloud ..."
-Start-Sleep -Seconds 5
+# Main Script Start
+# -------------------------------------------
+Write-Host -ForegroundColor Cyan "Starting the Deployment Process..."
 
-#Change Display Resolution for Virtual Machine
-if ((Get-MyComputerModel) -match 'Virtual') {
-    Write-Host  -ForegroundColor Cyan "Setting Display Resolution to 1600x"
-    Set-DisRes 1600
+# Trigger Custom OSDCloud Provisioning
+Write-Host -ForegroundColor Cyan "Running OSDCloud Provisioning Script..."
+Watch-OSDCloudProvisioning {
+    Write-Host -ForegroundColor Cyan "Starting SeguraOSD's Custom OSDCloud ..."
+    Start-Sleep -Seconds 5
+
+    # Change Display Resolution for Virtual Machine
+    if ((Get-MyComputerModel) -match 'Virtual') {
+        Write-Host -ForegroundColor Cyan "Setting Display Resolution to 1600x"
+        Set-DisRes 1600
+    }
+
+    # Update and Import OSD PowerShell Module
+    Write-Host -ForegroundColor Cyan "Updating the awesome OSD PowerShell Module"
+    Install-Module OSD -Force
+    Write-Host -ForegroundColor Cyan "Importing the sweet OSD PowerShell Module"
+    Import-Module OSD -Force
+
+    # Placeholder for ISO Ejection
+    Write-Host -ForegroundColor Cyan "Ejecting ISO"
+    Write-Warning "That didn't work because I haven't coded it yet!"
+
+    # Start OSDCloud Deployment
+    Write-Host -ForegroundColor Cyan "Start OSDCloud with MY Parameters"
+    Start-OSDCloud -OSLanguage en-us -OSBuild 20H2 -OSEdition Enterprise -ZTI
+
+    # Placeholder for Post-Action
+    Write-Host -ForegroundColor Cyan "Starting OSDCloud PostAction ..."
+    Write-Warning "I'm not sure of what to put here yet"
+
+    # Restart from WinPE
+    Write-Host -ForegroundColor Cyan "Restarting in 20 seconds!"
+    Start-Sleep -Seconds 20
+    wpeutil reboot
 }
 
-#Make sure I have the latest OSD Content
-Write-Host  -ForegroundColor Cyan "Updating the awesome OSD PowerShell Module"
-Install-Module OSD -Force
+# Continue with Winget Installation
+Write-Host -ForegroundColor Cyan "OSDCloud provisioning completed. Proceeding with Winget installation..."
 
-Write-Host  -ForegroundColor Cyan "Importing the sweet OSD PowerShell Module"
-Import-Module OSD -Force
+# Ensure Winget is Installed
+Write-Host -ForegroundColor Cyan "Checking if Winget is installed..."
+if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+    Write-Host -ForegroundColor Cyan "Winget not found. Installing Winget..."
+    osdcloud-StartOOBE -InstallWinGet -WinGetUpgrade -WinGetPwsh -SkipOSD
+}
 
-#TODO: Spend the time to write a function to do this and put it here
-Write-Host  -ForegroundColor Cyan "Ejecting ISO"
-Write-Warning "That didn't work because I haven't coded it yet!"
-#Start-Sleep -Seconds 5
+# Install Applications using Winget
+Write-Host -ForegroundColor Cyan "Installing Applications via Winget..."
+Start-Sleep -Seconds 3
 
-#Start OSDCloud ZTI the RIGHT way
-Write-Host  -ForegroundColor Cyan "Start OSDCloud with MY Parameters"
-Start-OSDCloud -OSLanguage en-us -OSBuild 22H2 -OSEdition Enterprise -ZTI
+# Example Application Installations
+Write-Host -ForegroundColor Cyan "Installing Microsoft Office..."
+winget install -e --id Microsoft.Office --accept-package-agreements --accept-source-agreements
 
-#Anything I want  can go right here and I can change it at any time since it is in the Cloud!!!!!
-Write-Host  -ForegroundColor Cyan "Starting OSDCloud PostAction ..."
-Write-Warning "I'm not sure of what to put here yet"
+Write-Host -ForegroundColor Cyan "Installing Google Chrome..."
+winget install -e --id Google.Chrome --accept-package-agreements --accept-source-agreements
 
-#Restart from WinPE
-Write-Host  -ForegroundColor Cyan "Restarting in 20 seconds!"
-Start-Sleep -Seconds 30
-wpeutil reboot
+Write-Host -ForegroundColor Cyan "Installing Zoom..."
+winget install -e --id Zoom.Zoom --accept-package-agreements --accept-source-agreements
+
+Write-Host -ForegroundColor Cyan "Application installation complete. Deployment process finished!"
+
+# End of Script
+# -------------------------------------------
